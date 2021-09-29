@@ -1,0 +1,133 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: shinyserver-base
+  template: shinyserver-base
+message: |-
+  Create base images for Shiny Application with ODBC packages
+  
+metadata:
+  annotations:
+    description: |
+      Deploys R Shiny server to OpenShift
+      Based on https://hub.docker.com/r/rocker/shiny Dockerfile
+    iconClass: icon-other-linux
+    openshift.io/display-name: R Shiny server
+    openshift.io/documentation-url: https://github.com/CSCfi/shiny-openshift
+    openshift.io/support-url: 
+    tags: r, shiny
+    template.openshift.io/bindable: "false"
+  name: shinyserver-base
+
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+      description: Keeps track of changes in the official Shiny image
+    name: shinyserver-official
+    labels:
+      app: shinyserver-base
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+      description: Keeps track of changes in the shiny server imagewith odbc drivers
+    name: shinyserver-odbc
+    labels:
+      app: shinyserver-base
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: shinyserver-official
+    labels:
+      app: shinyserver-base
+    annotations:
+      description: Copy shiny server image in openshift
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    strategy:
+      type: Docker
+    source:
+      type: Dockerfile
+      dockerfile: |
+        FROM rocker/shiny:latest
+    output:
+      to:
+        kind: ImageStreamTag
+        name: shinyserver-official:latest
+    triggers:
+      - type: ConfigChange
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: shinyserver-odbc
+    labels:
+      app: shinyserver-base
+    annotations:
+      description: Install ODBC driver for Shiny
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    source:
+      type: Git
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+        ref: ${SOURCE_REPOSITORY_REF}
+      contextDir: ${CONTEXT_DIR}
+    strategy:
+      dockerStrategy:
+        dockerfilePath: Dockerfile-shinyserver-odbc
+        from:
+          kind: ImageStreamTag
+          name: 'shinyserver-official:latest'
+        buildArgs:
+          - name: tag
+            value: shinyv1
+        env:
+          - name: NO_PROXY
+            value: '.local,.internal,.svc,.intraxa'
+          - name: http_proxy
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: https_proxy
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: HTTP_PROXY
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: HTTPS_PROXY
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: no_proxy
+            value: '.local,.internal,.svc,.intraxa'
+          - name: PROXY_HOST
+            value: '${PROXY_SERVICE_NAME}'
+          - name: PROXY_PORT
+            value: '8080'
+    output:
+      to:
+        kind: ImageStreamTag
+        name: shinyserver-odbc:latest
+    triggers:
+      - type: ImageChange
+      - type: ConfigChange
+
+####################
+
+parameters:
+- description: The URL of the repository with your application source code
+  displayName: Git Repository URL
+  name: SOURCE_REPOSITORY_URL
+  required: true
+  value: https://rxjh3xsvmxhzeelobpy3ji7zybmstu7n4fwmcavji7pw6rinux6a@dev.azure.com/SHINE-AGDF/SHINE-AGDF/_git/Shiny
+- description: Set this to a branch name, tag or other ref of your repository if you are not using the default branch
+  displayName: Git Reference
+  name: SOURCE_REPOSITORY_REF
+  value: main
+- description: Set this to the relative path to your project if it is not in the root of your repository
+  displayName: Context Directory
+  name: CONTEXT_DIR
+  value:
+- name: PROXY_SERVICE_NAME
+  description: Name of the service used for the PROXY_SERVICE_NAME
+  value: egress-http-proxy
+  required: true

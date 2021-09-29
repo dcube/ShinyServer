@@ -1,0 +1,237 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+message: |-
+  Shiny application   
+metadata:
+  annotations:
+    description: |
+      Deploys R Shiny application to OpenShift
+      Based on shiny-odbc image
+    iconClass: icon-other-linux
+    openshift.io/display-name: R Shiny application
+    openshift.io/documentation-url: https://github.com/CSCfi/shiny-openshift
+    openshift.io/support-url: 
+    tags: r, shiny
+    template.openshift.io/bindable: "false"
+  name: shiny-application
+
+objects:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: shiny-${APPLICATION_NAME}
+    labels:
+      app: shiny-${APPLICATION_NAME}
+  spec:
+    ports:
+    - port: 3838
+      targetPort: 3838
+      name: shiny-${APPLICATION_NAME}-service
+      protocol: TCP
+    selector:
+      app: shiny-${APPLICATION_NAME}
+    sessionAffinity: None
+    type: ClusterIP
+
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: shiny-${APPLICATION_NAME}-route
+    labels:
+      app: shiny-${APPLICATION_NAME}
+    annotations:
+      template.openshift.io/expose-uri: http://{.spec.host}
+  spec:
+    host: ${APPLICATION_NAME}.${APPLICATION_DOMAIN_SUFFIX}
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    to:
+      kind: Service
+      name: shiny-${APPLICATION_NAME}
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+      description: Keeps track of changes in the application image
+    name: shiny-${APPLICATION_NAME}
+    labels:
+      app: shiny-${APPLICATION_NAME}
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: shiny-${APPLICATION_NAME}
+    labels:
+      app: shiny-${APPLICATION_NAME}
+    annotations:
+      description: Defines how to build the application
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    source:
+      type: Git
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+        ref: ${SOURCE_REPOSITORY_REF}
+      contextDir: ${CONTEXT_DIR}
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: 'shinyserver-odbc:latest'
+        env:
+          - name: NO_PROXY
+            value: '.local,.internal,.svc,.intraxa'
+          - name: http_proxy
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: https_proxy
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: HTTP_PROXY
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: HTTPS_PROXY
+            value: 'http://${PROXY_SERVICE_NAME}:8080'
+          - name: no_proxy
+            value: '.local,.internal,.svc,.intraxa'
+    output:
+      to:
+        kind: ImageStreamTag
+        name: shiny-${APPLICATION_NAME}:latest
+    triggers:
+      - type: ConfigChange
+##
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+      description: R Shiny server deployment
+      template.alpha.openshift.io/wait-for-ready: "true"
+    name: shiny-${APPLICATION_NAME}
+    labels:
+      app: shiny-${APPLICATION_NAME}
+      scale: workinghours
+  spec:
+    strategy:
+      type: Rolling
+    triggers:
+      - type: ImageChange
+        imageChangeParams:
+          automatic: true
+          containerNames:
+            - shinyserver
+          from:
+            kind: ImageStreamTag
+            name: shiny-${APPLICATION_NAME}:latest
+      - type: ConfigChange
+    replicas: 1
+    template:
+      metadata:
+        name: shiny-${APPLICATION_NAME}
+        labels:
+          app: shiny-${APPLICATION_NAME}
+      spec:
+        containers:
+          - name: shinyserver
+            image: shiny-${APPLICATION_NAME}:latest
+            ports:
+              - containerPort: 3838
+            env:
+              - name: NO_PROXY
+                value: '127.0.0.1,localhost,.local,.internal,.svc,.intraxa'
+              - name: http_proxy
+                value: 'http://${PROXY_SERVICE_NAME}:8080'
+              - name: https_proxy
+                value: 'http://${PROXY_SERVICE_NAME}:8080'
+              - name: HTTP_PROXY
+                value: 'http://${PROXY_SERVICE_NAME}:8080'
+              - name: HTTPS_PROXY
+                value: 'http://${PROXY_SERVICE_NAME}:8080'
+              - name: no_proxy
+                value: '127.0.0.1,localhost,.local,.internal,.svc,.intraxa'
+              - name: DATABRICKS_HOST
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: host
+              - name: DATABRICKS_CLUSTER_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: cluster_id
+              - name: DATABRICKS_ORG_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: org_id
+              - name: DATABRICKS_HTTP_PATH
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: http_path
+              - name: DATABRICKS_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: client_id
+              - name: DATABRICKS_CLIENT_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: client_secret
+              - name: DATABRICKS_TENANT
+                valueFrom:
+                  secretKeyRef:
+                    name: ${DATABRICKS_SECRET_NAME}
+                    key: tenant
+            readinessProbe:
+              timeoutSeconds: 30
+              initialDelaySeconds: 30
+              httpGet:
+                path: /
+                port: 3838
+            livenessProbe:
+              timeoutSeconds: 30
+              initialDelaySeconds: 30
+              httpGet:
+                path: /
+                port: 3838
+            resources:
+              limits:
+                memory: ${MEMORY_LIMIT}
+
+
+####################
+
+parameters:
+- name: APPLICATION_NAME
+  description: Name for the application
+  required: true
+- description: Maximum amount of memory the container can use
+  displayName: Memory Limit
+  name: MEMORY_LIMIT
+  required: true
+  value: 500Mi
+- description: The URL of the repository with your application source code
+  displayName: Git Repository URL
+  name: SOURCE_REPOSITORY_URL
+  required: true
+- description: Set this to a branch name, tag or other ref of your repository if you are not using the default branch
+  displayName: Git Reference
+  name: SOURCE_REPOSITORY_REF
+  value: main
+- description: Set this to the relative path to your project if it is not in the root of your repository
+  displayName: Context Directory
+  name: CONTEXT_DIR
+  value:
+- description: The exposed hostname suffix that will be used to create routes for app
+  displayName: Application Hostname Suffix
+  name: APPLICATION_DOMAIN_SUFFIX
+  value: axa-gd-fr-dev-int.teal.westeurope.azure.openpaas.axa-cloud.com
+- name: PROXY_SERVICE_NAME
+  description: Name of the service used for the PROXY_SERVICE_NAME
+  value: egress-http-proxy
+  required: true
+- name: DATABRICKS_SECRET_NAME
+  description: Name of the secret containing environment variables to connect to Databricks
+  value: poc-python-dash-databricks
+  required: true
