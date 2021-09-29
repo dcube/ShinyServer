@@ -36,7 +36,6 @@ RUN echo "[ODBC Data Sources]" >> /etc/odbc.ini && \
     echo "SparkServerType = 3" >> /etc/odbc.ini && \
     echo "AuthMech        = 11" >> /etc/odbc.ini && \
     echo "Auth_Flow       = 0" >> /etc/odbc.ini && \
-    echo "UID             = token" >> /etc/odbc.ini && \
     echo "ThriftTransport = 2" >> /etc/odbc.ini && \
     echo "SSL             = 1" >> /etc/odbc.ini && \
     echo "HTTPPath        = " >> /etc/odbc.ini && \
