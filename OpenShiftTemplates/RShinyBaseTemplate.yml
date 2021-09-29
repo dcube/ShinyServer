@@ -118,7 +118,7 @@ parameters:
   displayName: Git Repository URL
   name: SOURCE_REPOSITORY_URL
   required: true
-  value: https://rxjh3xsvmxhzeelobpy3ji7zybmstu7n4fwmcavji7pw6rinux6a@dev.azure.com/SHINE-AGDF/SHINE-AGDF/_git/Shiny
+  value: https://github.com/dcube/ShinyServer.git
 - description: Set this to a branch name, tag or other ref of your repository if you are not using the default branch
   displayName: Git Reference
   name: SOURCE_REPOSITORY_REF
