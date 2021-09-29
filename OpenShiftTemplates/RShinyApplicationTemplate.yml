@@ -226,7 +226,7 @@ parameters:
 - description: The exposed hostname suffix that will be used to create routes for app
   displayName: Application Hostname Suffix
   name: APPLICATION_DOMAIN_SUFFIX
-  value: axa-gd-fr-dev-int.teal.westeurope.azure.openpaas.axa-cloud.com
+  required: true
 - name: PROXY_SERVICE_NAME
   description: Name of the service used for the PROXY_SERVICE_NAME
   value: egress-http-proxy
