@@ -88,7 +88,7 @@ objects:
             value: shinyv1
         env:
           - name: NO_PROXY
-            value: '.local,.internal,.svc,.intraxa'
+            value: '.local,.internal,.svc'
           - name: http_proxy
             value: 'http://${PROXY_SERVICE_NAME}:8080'
           - name: https_proxy
@@ -98,7 +98,7 @@ objects:
           - name: HTTPS_PROXY
             value: 'http://${PROXY_SERVICE_NAME}:8080'
           - name: no_proxy
-            value: '.local,.internal,.svc,.intraxa'
+            value: '.local,.internal,.svc'
           - name: PROXY_HOST
             value: '${PROXY_SERVICE_NAME}'
           - name: PROXY_PORT
